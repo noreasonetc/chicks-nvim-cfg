@@ -84,6 +84,9 @@ I hope you enjoy your Neovim journey,
 P.S. You can delete this when you're done too. It's your config now! :)
 --]]
 
+-- Python provider (using dedicated venv)
+vim.g.python3_host_prog = vim.fn.expand('~/.config/nvim/venv/bin/python')
+
 -- Set <space> as the leader key
 -- See `:help mapleader`
 --  NOTE: Must happen before plugins are loaded (otherwise wrong leader will be used)
@@ -91,12 +94,15 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
 
 -- [[ Setting options ]]
 -- See `:help vim.o`
 -- NOTE: You can change these options as you wish!
 --  For more options, you can see `:help option-list`
+
+-- Enable true color support (required for modern colorschemes)
+vim.o.termguicolors = true
 
 -- Make line numbers default
 vim.o.number = true
@@ -183,6 +189,39 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 -- NOTE: This won't work in all terminal emulators/tmux/etc. Try your own mapping
 -- or just use <C-\><C-n> to exit terminal mode
 vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
+
+-- Run current file using terminal 9 (dedicated run terminal)
+vim.keymap.set('n', '<leader>r', function()
+  local ft = vim.bo.filetype
+  local cmd
+  local file = vim.fn.expand('%:p')
+
+  if ft == 'python' then
+    -- Check for virtual environment
+    local venv_python = nil
+    local cwd = vim.fn.getcwd()
+    local possible_venvs = { '.venv/bin/python', 'venv/bin/python', 'env/bin/python' }
+    for _, venv in ipairs(possible_venvs) do
+      local venv_path = cwd .. '/' .. venv
+      if vim.fn.filereadable(venv_path) == 1 then
+        venv_python = venv_path
+        break
+      end
+    end
+    local python = venv_python or 'python3'
+    cmd = python .. ' ' .. file
+  elseif ft == 'go' then
+    cmd = 'go run ' .. file
+  else
+    print('No run command for filetype: ' .. ft)
+    return
+  end
+  -- Close existing run terminal and open fresh one
+  vim.cmd('9TermExec cmd="' .. cmd .. '" direction=horizontal')
+end, { desc = '[R]un current file' })
+
+-- Close the run terminal
+vim.keymap.set('n', '<leader>rc', '<cmd>9ToggleTerm<cr>', { desc = '[R]un [C]lose terminal' })
 
 -- TIP: Disable arrow keys in normal mode
 -- vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
@@ -672,8 +711,8 @@ require('lazy').setup({
       --        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
       local servers = {
         -- clangd = {},
-        -- gopls = {},
-        -- pyright = {},
+        gopls = {},
+        pyright = {},
         -- rust_analyzer = {},
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
         --
@@ -876,25 +915,17 @@ require('lazy').setup({
     },
   },
 
-  { -- You can easily change to a different colorscheme.
-    -- Change the name of the colorscheme plugin below, and then
-    -- change the command in the config to whatever the name of that colorscheme is.
-    --
-    -- If you want to see what colorschemes are already installed, you can use `:Telescope colorscheme`.
-    'folke/tokyonight.nvim',
-    priority = 1000, -- Make sure to load this before all the other start plugins.
+  -- Colorschemes (change vim.cmd.colorscheme below to switch)
+  -- Options: tokyonight-night, tokyonight-storm, tokyonight-moon, kanagawa, kanagawa-wave, kanagawa-dragon, kanagawa-lotus, eldritch, nightfox, carbonfox, duskfox, nordfox, terafox
+  { 'folke/tokyonight.nvim', priority = 1000 },
+  { 'rebelot/kanagawa.nvim', priority = 1000 },
+  { 'eldritch-theme/eldritch.nvim', priority = 1000 },
+  {
+    'EdenEast/nightfox.nvim',
+    priority = 1000,
     config = function()
-      ---@diagnostic disable-next-line: missing-fields
-      require('tokyonight').setup {
-        styles = {
-          comments = { italic = false }, -- Disable italics in comments
-        },
-      }
-
-      -- Load the colorscheme here.
-      -- Like many other themes, this one has different styles, and you could load
-      -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
-      vim.cmd.colorscheme 'tokyonight-night'
+      -- Set your preferred colorscheme here
+      vim.cmd.colorscheme 'carbonfox'
     end,
   },
 
@@ -941,21 +972,14 @@ require('lazy').setup({
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
     build = ':TSUpdate',
-    main = 'nvim-treesitter.configs', -- Sets main module to use for opts
     -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
-    opts = {
-      ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
-      -- Autoinstall languages that are not installed
-      auto_install = true,
-      highlight = {
-        enable = true,
-        -- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
-        --  If you are experiencing weird indenting issues, add the language to
-        --  the list of additional_vim_regex_highlighting and disabled languages for indent.
-        additional_vim_regex_highlighting = { 'ruby' },
-      },
-      indent = { enable = true, disable = { 'ruby' } },
-    },
+    config = function()
+      ---@diagnostic disable-next-line: missing-fields
+      require('nvim-treesitter').setup {}
+      -- Install parsers
+      local ensure_installed = { 'bash', 'c', 'diff', 'go', 'gomod', 'gosum', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'python', 'query', 'vim', 'vimdoc' }
+      require('nvim-treesitter').install(ensure_installed)
+    end,
     -- There are additional nvim-treesitter modules that you can use to interact
     -- with nvim-treesitter. You should go explore a few and see what interests you:
     --
@@ -973,11 +997,133 @@ require('lazy').setup({
   --  Here are some example plugins that I've included in the Kickstart repository.
   --  Uncomment any of the lines below to enable them (you will need to restart nvim).
   --
-  -- require 'kickstart.plugins.debug',
-  -- require 'kickstart.plugins.indent_line',
-  -- require 'kickstart.plugins.lint',
-  -- require 'kickstart.plugins.autopairs',
-  -- require 'kickstart.plugins.neo-tree',
+  require 'kickstart.plugins.debug',
+  require 'kickstart.plugins.indent_line',
+  require 'kickstart.plugins.lint',
+  require 'kickstart.plugins.autopairs',
+  require 'kickstart.plugins.neo-tree',
+
+  -- Auto-save
+  {
+    'okuuva/auto-save.nvim',
+    event = { 'InsertLeave', 'TextChanged' },
+    opts = {
+      debounce_delay = 1000, -- delay in ms (saves 1 second after you stop typing)
+    },
+    keys = {
+      { '<leader>as', ':ASToggle<CR>', desc = '[A]uto-[S]ave toggle' },
+    },
+  },
+
+  -- Scratch pad
+  {
+    'LintaoAmons/scratch.nvim',
+    keys = {
+      { '<leader>sn', '<cmd>Scratch<cr>', desc = '[S]cratch [N]ew' },
+      { '<leader>so', '<cmd>ScratchOpen<cr>', desc = '[S]cratch [O]pen' },
+    },
+  },
+
+  -- Oil.nvim for file management (edit filesystem like a buffer)
+  {
+    'stevearc/oil.nvim',
+    dependencies = { 'nvim-tree/nvim-web-devicons' },
+    opts = {
+      view_options = {
+        show_hidden = true,
+      },
+    },
+    keys = {
+      { '-', '<cmd>Oil<cr>', desc = 'Open parent directory (Oil)' },
+    },
+  },
+
+  -- Toggle terminal
+  {
+    'akinsho/toggleterm.nvim',
+    version = '*',
+    opts = {
+      size = 15,
+      open_mapping = [[<C-\>]],
+      direction = 'horizontal',
+      shade_terminals = true,
+    },
+  },
+
+  -- Trouble.nvim for better diagnostics UI
+  {
+    'folke/trouble.nvim',
+    dependencies = { 'nvim-tree/nvim-web-devicons' },
+    opts = {},
+    cmd = 'Trouble',
+    keys = {
+      { '<leader>xx', '<cmd>Trouble diagnostics toggle<cr>', desc = 'Diagnostics (Trouble)' },
+      { '<leader>xX', '<cmd>Trouble diagnostics toggle filter.buf=0<cr>', desc = 'Buffer Diagnostics (Trouble)' },
+      { '<leader>cs', '<cmd>Trouble symbols toggle focus=false<cr>', desc = 'Symbols (Trouble)' },
+      { '<leader>xL', '<cmd>Trouble loclist toggle<cr>', desc = 'Location List (Trouble)' },
+      { '<leader>xQ', '<cmd>Trouble qflist toggle<cr>', desc = 'Quickfix List (Trouble)' },
+    },
+  },
+
+  -- Neotest for running tests
+  {
+    'nvim-neotest/neotest',
+    dependencies = {
+      'nvim-neotest/nvim-nio',
+      'nvim-lua/plenary.nvim',
+      'antoinemadec/FixCursorHold.nvim',
+      'nvim-treesitter/nvim-treesitter',
+      -- Test adapters
+      'nvim-neotest/neotest-python',
+      'fredrikaverpil/neotest-golang',
+    },
+    config = function()
+      require('neotest').setup {
+        adapters = {
+          require('neotest-python') {
+            dap = { justMyCode = false },
+            python = vim.fn.expand('~/.config/nvim/venv/bin/python'),
+          },
+          require('neotest-golang'),
+        },
+      }
+
+      -- Keymaps
+      vim.keymap.set('n', '<leader>tt', function() require('neotest').run.run() end, { desc = '[T]est: Run nearest' })
+      vim.keymap.set('n', '<leader>tf', function() require('neotest').run.run(vim.fn.expand('%')) end, { desc = '[T]est: Run file' })
+      vim.keymap.set('n', '<leader>ts', function() require('neotest').summary.toggle() end, { desc = '[T]est: Toggle summary' })
+      vim.keymap.set('n', '<leader>to', function() require('neotest').output.open({ enter = true }) end, { desc = '[T]est: Show output' })
+      vim.keymap.set('n', '<leader>tO', function() require('neotest').output_panel.toggle() end, { desc = '[T]est: Toggle output panel' })
+      vim.keymap.set('n', '<leader>td', function() require('neotest').run.run({ strategy = 'dap' }) end, { desc = '[T]est: Debug nearest' })
+    end,
+  },
+
+  -- Render Markdown for pretty markdown viewing
+  {
+    'MeanderingProgrammer/render-markdown.nvim',
+    dependencies = { 'nvim-treesitter/nvim-treesitter', 'nvim-tree/nvim-web-devicons' },
+    ft = { 'markdown' },
+    opts = {},
+  },
+
+  -- Harpoon for quick file navigation
+  {
+    'ThePrimeagen/harpoon',
+    branch = 'harpoon2',
+    dependencies = { 'nvim-lua/plenary.nvim' },
+    config = function()
+      local harpoon = require('harpoon')
+      harpoon:setup()
+
+      vim.keymap.set('n', '<leader>a', function() harpoon:list():add() end, { desc = 'Harpoon: [A]dd file' })
+      vim.keymap.set('n', '<C-e>', function() harpoon.ui:toggle_quick_menu(harpoon:list()) end, { desc = 'Harpoon: Toggle menu' })
+
+      vim.keymap.set('n', '<leader>1', function() harpoon:list():select(1) end, { desc = 'Harpoon: File 1' })
+      vim.keymap.set('n', '<leader>2', function() harpoon:list():select(2) end, { desc = 'Harpoon: File 2' })
+      vim.keymap.set('n', '<leader>3', function() harpoon:list():select(3) end, { desc = 'Harpoon: File 3' })
+      vim.keymap.set('n', '<leader>4', function() harpoon:list():select(4) end, { desc = 'Harpoon: File 4' })
+    end,
+  },
   -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
 
   -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
