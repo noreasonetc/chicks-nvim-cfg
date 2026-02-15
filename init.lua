@@ -158,6 +158,14 @@ vim.o.splitbelow = true
 vim.o.list = true
 vim.opt.listchars = { tab = '» ', trail = '·', nbsp = '␣' }
 
+-- Security: Disable modelines to prevent arbitrary code execution from files
+vim.o.modeline = false
+vim.o.modelines = 0
+
+-- Security: Enable local config files with trust prompt (requires Neovim 0.9+)
+-- When a .nvim.lua, .nvimrc, or .exrc is found, Neovim will prompt before loading
+vim.o.exrc = true
+
 -- Preview substitutions live, as you type!
 vim.o.inccommand = 'split'
 
@@ -1122,6 +1130,11 @@ require('lazy').setup({
       vim.keymap.set('n', '<leader>2', function() harpoon:list():select(2) end, { desc = 'Harpoon: File 2' })
       vim.keymap.set('n', '<leader>3', function() harpoon:list():select(3) end, { desc = 'Harpoon: File 3' })
       vim.keymap.set('n', '<leader>4', function() harpoon:list():select(4) end, { desc = 'Harpoon: File 4' })
+
+      vim.keymap.set('n', '<leader>h1', function() harpoon:list():replace_at(1) end, { desc = 'Harpoon: Set slot 1' })
+      vim.keymap.set('n', '<leader>h2', function() harpoon:list():replace_at(2) end, { desc = 'Harpoon: Set slot 2' })
+      vim.keymap.set('n', '<leader>h3', function() harpoon:list():replace_at(3) end, { desc = 'Harpoon: Set slot 3' })
+      vim.keymap.set('n', '<leader>h4', function() harpoon:list():replace_at(4) end, { desc = 'Harpoon: Set slot 4' })
     end,
   },
   -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
